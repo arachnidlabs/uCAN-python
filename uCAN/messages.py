@@ -2,6 +2,33 @@ import bitstring
 import enum
 
 
+class HardwareId(object):
+    def __init__(self, x):
+        if isinstance(x, str) and len(x) == 6:
+            self.hwid = x
+        elif isinstance(x, basestring):
+            self.hwid = ''.join(y.decode('hex') for y in x.split(':'))
+        elif isinstance(x, HardwareId):
+            self.hwid = x.hwid
+        else:
+            raise ValueError("Don't know how to interpret %r as a hardware ID", x)
+
+    def __unicode__(self):
+        return ':'.join(x.encode('hex') for x in self.hwid)
+
+    def __str__(self):
+        return str(unicode(self))
+
+    def __eq__(self, other):
+        return self.hwid == HardwareId(other).hwid
+
+    def __neq__(self, other):
+        return self.hwid != HardwareId(other).hwid
+
+    def __hash__(self):
+        return hash(self.hwid)
+
+
 class Priority(enum.IntEnum):
     emergency = 0
     high = 1
@@ -39,7 +66,7 @@ class BroadcastMessage(Message):
     @classmethod
     def decode(cls, priority, header, body):
         protocol = header.read('uint:4')
-        return cls.broadcast_protocols.get(protocol, UnknownBrodcastMessage).decode(priority, protocol, header, body)
+        return cls.broadcast_protocols.get(protocol, UnknownBroadcastMessage).decode(priority, protocol, header, body)
 
     def encodeHeader(self, subfields):
         return super(BroadcastMessage, self).encodeHeader(bitstring.pack('bool, uint:4, bits:14', True, self.protocol, subfields))
@@ -106,7 +133,7 @@ class YARPMessage(UnicastMessage):
         super(YARPMessage, self).__init__(0, **kwargs)
         self.query = query
         self.response = response
-        self.hardware_id = hardware_id
+        self.hardware_id = HardwareId(hardware_id)
         self.new_node_id = new_node_id
 
     @classmethod
@@ -118,7 +145,7 @@ class YARPMessage(UnicastMessage):
 
         hardware_id = None
         if has_hwid:
-            hardware_id = body.read('bytes:6')
+            hardware_id = HardwareId(body.read('bytes:6'))
 
         new_node_id = None
         if response and not query:
@@ -131,9 +158,9 @@ class YARPMessage(UnicastMessage):
 
     def encodeBody(self):
         if self.response and not self.query:
-            return bitstring.pack("bytes:6, uint:8", self.hardware_id, self.new_node_id)
+            return bitstring.pack("bytes:6, uint:8", self.hardware_id.hwid, self.new_node_id)
         elif self.hardware_id is not None:
-            return bitstring.pack("bytes:6", self.hardware_id)
+            return bitstring.pack("bytes:6", self.hardware_id.hwid)
         else:
             return bitstring.BitString()
 UnicastMessage.unicast_protocols[YARPMessage.PROTOCOL_NUMBER] = YARPMessage

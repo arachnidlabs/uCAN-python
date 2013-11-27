@@ -4,6 +4,19 @@ import unittest
 
 sample_hwid = "\x01\x23\x45\x67\x89\xAB"
 
+
+class HardwareIdTest(unittest.TestCase):
+    def testHardwareId(self):
+        hwid = messages.HardwareId(sample_hwid)
+        self.assertEquals(sample_hwid, hwid)
+        self.assertEquals(hwid, sample_hwid)
+        self.assertEquals(str(hwid), "01:23:45:67:89:ab")
+        self.assertEquals(hwid, "01:23:45:67:89:ab")
+        self.assertNotEquals(hwid, "01:23:45:67:89:ac")
+        self.assertEquals(messages.HardwareId("01:23:45:67:89:ab"), hwid)
+        self.assertEquals(hwid, messages.HardwareId(hwid))
+
+
 class MessagesTest(unittest.TestCase):
     def testYARP(self):
         yarp = messages.YARPMessage(sender=0x12, recipient=0x34, query=True, response=False, hardware_id=sample_hwid)
@@ -32,7 +45,7 @@ class MessagesTest(unittest.TestCase):
         self.assertEquals(rap.encodeBody(), body)
 
         rap = messages.Message.decode(header, body)
-        self.assert_(isinstance,(rap, messages.RAPMessage))
+        self.assert_(isinstance(rap, messages.RAPMessage))
         self.assertTrue(rap.write)
         self.assertFalse(rap.response)
         self.assertEquals(rap.page, 0)
