@@ -11,7 +11,7 @@ class HardwareId(object):
         elif isinstance(x, HardwareId):
             self.hwid = x.hwid
         else:
-            raise ValueError("Don't know how to interpret %r as a hardware ID", x)
+            raise ValueError("Don't know how to interpret %r as a hardware ID" % (x,))
 
     def __unicode__(self):
         return ':'.join(x.encode('hex') for x in self.hwid)
@@ -22,7 +22,7 @@ class HardwareId(object):
     def __eq__(self, other):
         return self.hwid == HardwareId(other).hwid
 
-    def __neq__(self, other):
+    def __ne__(self, other):
         return self.hwid != HardwareId(other).hwid
 
     def __hash__(self):
@@ -50,6 +50,11 @@ class Message(object):
 
     @classmethod
     def decode(cls, header, body):
+        if isinstance(header, int):
+            header = bitstring.BitString(uint=header, length=29)
+        if isinstance(body, (str, bytearray)):
+            body = bitstring.BitString(bytes=body)
+
         priority = header.read('uint:2')
         broadcast = header.read('bool')
         if broadcast:
@@ -69,7 +74,8 @@ class BroadcastMessage(Message):
         return cls.broadcast_protocols.get(protocol, UnknownBroadcastMessage).decode(priority, protocol, header, body)
 
     def encodeHeader(self, subfields):
-        return super(BroadcastMessage, self).encodeHeader(bitstring.pack('bool, uint:4, bits:14', True, self.protocol, subfields))
+        return super(BroadcastMessage, self).encodeHeader(
+            bitstring.pack('bool, uint:4, bits:14', True, self.protocol, subfields))
 
 
 class UnknownBroadcastMessage(BroadcastMessage):
@@ -91,6 +97,8 @@ class UnknownBroadcastMessage(BroadcastMessage):
 
 
 class UnicastMessage(Message):
+    BROADCAST_RECIPIENT = 0xFF
+
     unicast_protocols = {}
 
     def __init__(self, protocol, recipient=None, **kwargs):
@@ -105,7 +113,8 @@ class UnicastMessage(Message):
         return ret
 
     def encodeHeader(self, subfields):
-        return super(UnicastMessage, self).encodeHeader(bitstring.pack('bool, uint:4, bits:6, uint:8', False, self.protocol, subfields, self.recipient))
+        return super(UnicastMessage, self).encodeHeader(
+            bitstring.pack('bool, uint:4, bits:6, uint:8', False, self.protocol, subfields, self.recipient))
 
 
 class UnknownUnicastMessage(UnicastMessage):
@@ -133,7 +142,7 @@ class YARPMessage(UnicastMessage):
         super(YARPMessage, self).__init__(0, **kwargs)
         self.query = query
         self.response = response
-        self.hardware_id = HardwareId(hardware_id)
+        self.hardware_id = hardware_id and HardwareId(hardware_id)
         self.new_node_id = new_node_id
 
     @classmethod
@@ -148,16 +157,17 @@ class YARPMessage(UnicastMessage):
             hardware_id = HardwareId(body.read('bytes:6'))
 
         new_node_id = None
-        if response and not query:
+        if not response and not query:
             new_node_id = body.read('uint:8')
 
         return cls(query, response, hardware_id, new_node_id, priority=priority)
 
     def encodeHeader(self):
-        return super(YARPMessage, self).encodeHeader(bitstring.pack("bool, bool, bool, pad:3", self.query, self.response, self.hardware_id is not None))
+        return super(YARPMessage, self).encodeHeader(
+            bitstring.pack("bool, bool, bool, pad:3", self.query, self.response, self.hardware_id is not None))
 
     def encodeBody(self):
-        if self.response and not self.query:
+        if not self.response and not self.query:
             return bitstring.pack("bytes:6, uint:8", self.hardware_id.hwid, self.new_node_id)
         elif self.hardware_id is not None:
             return bitstring.pack("bytes:6", self.hardware_id.hwid)
@@ -214,7 +224,8 @@ class RAPMessage(UnicastMessage):
         return cls(write, response, page, register, data, size=size, priority=priority)
 
     def encodeHeader(self):
-        return super(RAPMessage, self).encodeHeader(bitstring.pack("bool, bool, pad:1, uint:3", self.write, self.response, self.size))
+        return super(RAPMessage, self).encodeHeader(
+            bitstring.pack("bool, bool, pad:1, uint:3", self.write, self.response, self.size))
 
     def encodeBody(self):
         if self.write or self.response:

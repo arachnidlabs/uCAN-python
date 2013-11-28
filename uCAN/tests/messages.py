@@ -14,6 +14,7 @@ class HardwareIdTest(unittest.TestCase):
         self.assertEquals(hwid, "01:23:45:67:89:ab")
         self.assertNotEquals(hwid, "01:23:45:67:89:ac")
         self.assertEquals(messages.HardwareId("01:23:45:67:89:ab"), hwid)
+        self.assertNotEquals(messages.HardwareId("01:23:45:67:89:ac"), hwid)
         self.assertEquals(hwid, messages.HardwareId(hwid))
 
 
