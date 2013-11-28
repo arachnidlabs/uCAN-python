@@ -159,5 +159,97 @@ class YARPTest(unittest.TestCase):
         self.assertEquals(ubus.addressChanged, True)
 
 
+class RAPTest(unittest.TestCase):
+    def testSendWrite(self):
+        tb = TestBus([])
+        ubus = bus.Bus(tb, sample_hwid)
+        ubus.node_id = 0x10
+
+        ubus.writeRegisters(ubus.getNodeFromNodeId(0x20), 0, 42, "foo")
+        self.assertEquals(len(tb.send_queue), 1)
+        message = messages.Message.decode(tb.send_queue[0].arbitration_id, tb.send_queue[0].data)
+        self.assertTrue(isinstance(message, messages.RAPMessage))
+        self.assertTrue(message.write)
+        self.assertFalse(message.response)
+        self.assertEquals(message.sender, 0x10)
+        self.assertEquals(message.recipient, 0x20)
+        self.assertEquals(message.page, 0)
+        self.assertEquals(message.register, 42)
+        self.assertEquals(message.data, "foo")
+        self.assertEquals(message.size, 3)
+
+    def testSendRead(self):
+        tb = TestBus([
+            bus._encodeMessage(messages.RAPMessage(
+                sender=0x20, recipient=0x10, write=False, response=True, page=0, register=42, data="foo"))
+        ])
+        ubus = bus.Bus(tb, sample_hwid)
+        ubus.node_id = 0x10
+
+        self.assertEquals(ubus.readRegisters(ubus.getNodeFromNodeId(0x20), 0, 42, 3), "foo")
+        self.assertEquals(len(tb.send_queue), 1)
+        message = messages.Message.decode(tb.send_queue[0].arbitration_id, tb.send_queue[0].data)
+        self.assertTrue(isinstance(message, messages.RAPMessage))
+        self.assertFalse(message.write)
+        self.assertFalse(message.response)
+        self.assertEquals(message.sender, 0x10)
+        self.assertEquals(message.recipient, 0x20)
+        self.assertEquals(message.page, 0)
+        self.assertEquals(message.register, 42)
+        self.assertEquals(message.size, 3)
+
+    def testReadWrite(self):
+        tb = TestBus([
+            bus._encodeMessage(messages.RAPMessage(
+                sender=0x20, recipient=0x10, write=True, response=False, page=0, register=254, data="foo")),
+            bus._encodeMessage(messages.RAPMessage(
+                sender=0x20, recipient=0x10, write=False, response=False, page=0, register=254, size=4)),
+        ])
+        ubus = bus.Bus(tb, sample_hwid)
+        ubus.node_id = 0x10
+
+        registers = ['\0'] * 256
+
+        def readReg(bus, page, addr):
+            return registers[addr]
+
+        def writeReg(bus, page, addr, data):
+            registers[addr] = data
+        ubus.configureRegisters(0, readReg, writeReg)
+
+        ubus.receive()
+        ubus.receive()
+
+        self.assertEquals(registers[254], 'f')
+        self.assertEquals(registers[255], 'o')
+        self.assertEquals(registers[0], 'o')
+
+        self.assertEquals(len(tb.send_queue), 1)
+        message = messages.Message.decode(tb.send_queue[0].arbitration_id, tb.send_queue[0].data)
+        self.assertTrue(isinstance(message, messages.RAPMessage))
+        self.assertFalse(message.write)
+        self.assertTrue(message.response)
+        self.assertEquals(message.sender, 0x10)
+        self.assertEquals(message.recipient, 0x20)
+        self.assertEquals(message.page, 0)
+        self.assertEquals(message.register, 254)
+        self.assertEquals(message.size, 4)
+        self.assertEquals(message.data, 'foo\0')
+
+    def testSendOverlengthRead(self):
+        tb = TestBus([])
+        ubus = bus.Bus(tb, sample_hwid)
+        ubus.node_id = 0x10
+
+        self.assertRaises(ValueError, ubus.readRegisters, ubus.getNodeFromNodeId(0x20), 0, 0, 8)
+
+    def testSendOverlengthWrite(self):
+        tb = TestBus([])
+        ubus = bus.Bus(tb, sample_hwid)
+        ubus.node_id = 0x10
+
+        self.assertRaises(ValueError, ubus.writeRegisters, ubus.getNodeFromNodeId(0x20), 0, 0, "foobarbaz")
+
+
 if __name__ == '__main__':
     unittest.main()

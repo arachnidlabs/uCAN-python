@@ -1,7 +1,7 @@
 import can.message
 from can.interfaces import socketcan_ctypes
 import time
-from uCAN.messages import HardwareId, Message, UnicastMessage, YARPMessage
+from uCAN.messages import HardwareId, Message, UnicastMessage, YARPMessage, RAPMessage
 
 
 class NodeAddress(object):
@@ -27,6 +27,9 @@ class Bus(object):
         self.node_id = None
         self.on_new_node_id = None
         self.timeout = 1.0
+
+        # RAP variables
+        self.register_map = {}
 
     def send(self, message):
         self.bus.send(_encodeMessage(message))
@@ -153,3 +156,103 @@ class Bus(object):
             response=False,
             hardware_id=hardware_id,
             new_node_id=node_id))
+
+    def _handleRAP(self, message):
+        if message.response:
+            return False
+
+        read_handler, write_handler = self.register_map.get(message.page, (None, None))
+
+        if message.write:
+            self._handleRAPWrite(message.sender, write_handler, message.page, message.register, message.data)
+        else:
+            self._handleRAPRead(message.sender, read_handler, message.page, message.register, message.size)
+    handlers[RAPMessage] = _handleRAP
+
+    def _handleRAPRead(self, sender, handler, page, register, size):
+        if handler:
+            data = [handler(self, page, (register + i) % 256) for i in range(size)]
+        else:
+            data = ['\0'] * size
+
+        self.send(RAPMessage(
+            sender=self.node_id,
+            recipient=sender,
+            write=False,
+            response=True,
+            page=page,
+            register=register,
+            data=data))
+
+    def _handleRAPWrite(self, sender, handler, page, register, data):
+        if not handler:
+            return
+
+        for i in range(len(data)):
+            handler(self, page, (register + i) % 256, data[i])
+
+    def configureRegisters(self, page, read_handler, write_handler):
+        """Configures read and write handlers for a RAP register page.
+
+        Arguments:
+          page: A page number, between 0 and 255 inclusive.
+          read_handler: A function to handle reads from this page.
+            This function will be called with the arguments (bus, page, register), and is expected
+            to return a single character string for the value of that register.
+          write_handler: A function to handle writes to this page.
+            This function will be called with the arguments (bus, page, register, data), where data
+            is a single character string.
+        """
+        self.register_map[page] = (read_handler, write_handler)
+
+    def readRegisters(self, node, page, register, length):
+        """Reads one or more registers from a remote node, returning them as a raw string.
+
+        Arguments:
+          node: The Node to send the read request to.
+          page: The page number to read from.
+          register: The starting register number to read from.
+          length: The number of bytes to read, maximum 6.
+
+        Returns:
+          A raw string containing register data, or None if no response was received in time.
+        """
+        if length > 6:
+            raise ValueError("Read too long: Only a maximum of 6 bytes may be read at once.")
+
+        self.send(RAPMessage(
+            sender=self.node_id,
+            recipient=node.node_id,
+            write=False,
+            response=False,
+            page=page,
+            register=register,
+            size=length))
+
+        def is_reply(message):
+            return isinstance(message, RAPMessage) and message.sender == node.node_id and \
+                message.response and not message.write and message.page == page and \
+                message.register == register
+        message = self._receiveUntil(is_reply)
+        return message and message.data
+
+    def writeRegisters(self, node, page, register, data):
+        """Writes one or more registers on a remote node.
+
+        Arguments:
+          node: The node to send the write to.
+          page: The page number to write to.
+          register: The starting register to write to.
+          data: The data to write, maximum 6 bytes.
+        """
+        if len(data) > 6:
+            raise ValueError("Write too long; only a maximum of 6 bytes may be written at once.")
+
+        self.send(RAPMessage(
+            sender=self.node_id,
+            recipient=node.node_id,
+            write=True,
+            response=False,
+            page=page,
+            register=register,
+            data=data))
