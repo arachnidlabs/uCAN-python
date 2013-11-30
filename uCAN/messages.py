@@ -50,7 +50,7 @@ class Message(object):
 
     @classmethod
     def decode(cls, header, body):
-        if isinstance(header, int):
+        if isinstance(header, (int, long)):
             header = bitstring.BitString(uint=header, length=29)
         if isinstance(body, (str, bytearray)):
             body = bitstring.BitString(bytes=body)
