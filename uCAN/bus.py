@@ -31,6 +31,24 @@ class Bus(object):
         # RAP variables
         self.register_map = {}
 
+    def start(self, default_node_id=None, now=time.time):
+        if not default_node_id:
+            default_node_id = ord(self.hardware_id.hwid[-1])
+        default_node_id &= 0x7F
+
+        self.node_id = 0xFF
+        # See if there's a nameserver out there to assign us a node ID
+        node = self.getNodeFromHardwareId(self.hardware_id, now=now)
+        if node:
+            self.node_id = node.node_id
+
+        # If we weren't assigned one, ping nodes until we find a free ID
+        while self.node_id == 0xFF:
+            if not self.ping(NodeAddress(self, default_node_id), now=now):
+                self.node_id = default_node_id
+            else:
+                default_node_id = (default_node_id + 1) & 0x7F
+
     def send(self, message):
         self.bus.send(_encodeMessage(message))
 
@@ -55,14 +73,14 @@ class Bus(object):
 
         return None if self._handleMessage(message) else message
 
-    def _receiveUntil(self, filter, time=time.time):
-        start = time()
+    def _receiveUntil(self, filter, now=time.time):
+        start = now()
         remaining = self.timeout
         while remaining > 0:
             message = self._tryReceive(remaining)
             if message and filter(message):
                 return message
-            remaining = self.timeout - (time() - start)
+            remaining = self.timeout - (now() - start)
         return None
 
     def receive(self):
@@ -72,7 +90,7 @@ class Bus(object):
         """Returns a NodeAddress instance for a given Node ID."""
         return NodeAddress(self, node_id)
 
-    def getNodeFromHardwareId(self, hardware_id):
+    def getNodeFromHardwareId(self, hardware_id, now=time.time):
         """Returns a NodeAddress instance for a given Node ID, or None if the node is not found."""
         # TODO: Implement hardware ID caching
         hardware_id = HardwareId(hardware_id)
@@ -86,7 +104,7 @@ class Bus(object):
         def is_reply(message):
             return (isinstance(message, YARPMessage) and message.hardware_id == hardware_id and
                     message.query and message.response)
-        response = self._receiveUntil(is_reply)
+        response = self._receiveUntil(is_reply, now=now)
         return response and NodeAddress(self, response.sender)
 
     def _handleYARP(self, message):
@@ -120,7 +138,7 @@ class Bus(object):
         """Called when a node's address changes."""
         pass
 
-    def ping(self, node):
+    def ping(self, node, now=time.time):
         """Pings a node to check if it's up.
 
         Arguments:
@@ -138,7 +156,7 @@ class Bus(object):
         def is_reply(message):
             return (isinstance(message, YARPMessage) and message.sender == node.node_id and
                     message.query and message.response)
-        response = self._receiveUntil(is_reply)
+        response = self._receiveUntil(is_reply, now=now)
         return response and response.hardware_id
 
     def setAddress(self, hardware_id, node_id):
@@ -205,7 +223,7 @@ class Bus(object):
         """
         self.register_map[page] = (read_handler, write_handler)
 
-    def readRegisters(self, node, page, register, length):
+    def readRegisters(self, node, page, register, length, now=time.time):
         """Reads one or more registers from a remote node, returning them as a raw string.
 
         Arguments:
@@ -233,7 +251,7 @@ class Bus(object):
             return isinstance(message, RAPMessage) and message.sender == node.node_id and \
                 message.response and not message.write and message.page == page and \
                 message.register == register
-        message = self._receiveUntil(is_reply)
+        message = self._receiveUntil(is_reply, now=now)
         return message and message.data
 
     def writeRegisters(self, node, page, register, data):
