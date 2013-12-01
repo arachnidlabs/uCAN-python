@@ -27,6 +27,7 @@ class Bus(object):
         self.node_id = None
         self.on_new_node_id = None
         self.timeout = 1.0
+        self.promiscuous = False
 
         # RAP variables
         self.register_map = {}
@@ -69,7 +70,10 @@ class Bus(object):
         if isinstance(message, UnicastMessage) and \
            message.recipient != self.node_id and \
            message.recipient != UnicastMessage.BROADCAST_RECIPIENT:
-            return None
+            if self.promiscuous:
+                return message
+            else:
+                return None
 
         return None if self._handleMessage(message) else message
 
