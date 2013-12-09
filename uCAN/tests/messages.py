@@ -2,7 +2,7 @@ import bitstring
 from uCAN import messages
 import unittest
 
-sample_hwid = "\x01\x23\x45\x67\x89\xAB"
+sample_hwid = "\x01\x23\x45\x67\x89\xAB\xCD"
 
 
 class HardwareIdTest(unittest.TestCase):
@@ -10,11 +10,11 @@ class HardwareIdTest(unittest.TestCase):
         hwid = messages.HardwareId(sample_hwid)
         self.assertEquals(sample_hwid, hwid)
         self.assertEquals(hwid, sample_hwid)
-        self.assertEquals(str(hwid), "01:23:45:67:89:ab")
-        self.assertEquals(hwid, "01:23:45:67:89:ab")
-        self.assertNotEquals(hwid, "01:23:45:67:89:ac")
-        self.assertEquals(messages.HardwareId("01:23:45:67:89:ab"), hwid)
-        self.assertNotEquals(messages.HardwareId("01:23:45:67:89:ac"), hwid)
+        self.assertEquals(str(hwid), "01:23:45:67:89:ab:cd")
+        self.assertEquals(hwid, "01:23:45:67:89:ab:cd")
+        self.assertNotEquals(hwid, "01:23:45:67:89:ab:ce")
+        self.assertEquals(messages.HardwareId("01:23:45:67:89:ab:cd"), hwid)
+        self.assertNotEquals(messages.HardwareId("01:23:45:67:89:ab:ce"), hwid)
         self.assertEquals(hwid, messages.HardwareId(hwid))
 
 
@@ -38,7 +38,8 @@ class MessagesTest(unittest.TestCase):
         self.assertEquals(yarp.encodeHeader(), header)
 
     def testDecodeEncodeRAP(self):
-        rap = messages.RAPMessage(sender=0x12, recipient=0x34, write=True, response=False, page=0, register=42, data='foo')
+        rap = messages.RAPMessage(sender=0x12, recipient=0x34, write=True, response=False, page=0, register=42,
+                                  data='foo')
         header = bitstring.BitString(uint=0x10633412, length=29)
         body = bitstring.BitString('0x002a666f6f')
 

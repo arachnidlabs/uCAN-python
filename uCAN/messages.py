@@ -4,7 +4,7 @@ import enum
 
 class HardwareId(object):
     def __init__(self, x):
-        if isinstance(x, str) and len(x) == 6:
+        if isinstance(x, str) and len(x) == 7:
             self.hwid = x
         elif isinstance(x, basestring):
             self.hwid = ''.join(y.decode('hex') for y in x.split(':'))
@@ -154,7 +154,7 @@ class YARPMessage(UnicastMessage):
 
         hardware_id = None
         if has_hwid:
-            hardware_id = HardwareId(body.read('bytes:6'))
+            hardware_id = HardwareId(body.read('bytes:7'))
 
         new_node_id = None
         if not response and not query:
@@ -168,9 +168,9 @@ class YARPMessage(UnicastMessage):
 
     def encodeBody(self):
         if not self.response and not self.query:
-            return bitstring.pack("bytes:6, uint:8", self.hardware_id.hwid, self.new_node_id)
+            return bitstring.pack("bytes:7, uint:8", self.hardware_id.hwid, self.new_node_id)
         elif self.hardware_id is not None:
-            return bitstring.pack("bytes:6", self.hardware_id.hwid)
+            return bitstring.pack("bytes:7", self.hardware_id.hwid)
         else:
             return bitstring.BitString()
 UnicastMessage.unicast_protocols[YARPMessage.PROTOCOL_NUMBER] = YARPMessage

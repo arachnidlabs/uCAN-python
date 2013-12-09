@@ -3,8 +3,8 @@ import unittest
 from uCAN import bus, messages
 
 
-sample_hwid = "\x01\x23\x45\x67\x89\xAB"
-sample_hwid_2 = "\x01\x23\x45\x67\x89\xAC"
+sample_hwid = "\x01\x23\x45\x67\x89\xAB\xCD"
+sample_hwid_2 = "\x01\x23\x45\x67\x89\xAB\xCE"
 
 
 class TestBus(can.bus.BusABC):
@@ -120,7 +120,7 @@ class YARPTest(unittest.TestCase):
         self.assertEquals(message.recipient, 0xFF)
         self.assertEquals(message.hardware_id, sample_hwid_2)
 
-        self.assertEquals(ubus.getNodeFromHardwareId("11:11:11:11:11:11"), None)
+        self.assertEquals(ubus.getNodeFromHardwareId("11:11:11:11:11:11:11"), None)
 
     def testPing(self):
         tb = TestBus()
@@ -140,7 +140,7 @@ class YARPTest(unittest.TestCase):
         self.assertEquals(message.recipient, 0x20)
         self.assertEquals(message.hardware_id, None)
 
-        self.assertEquals(ubus.getNodeFromHardwareId("11:11:11:11:11:11"), None)
+        self.assertEquals(ubus.getNodeFromHardwareId("11:11:11:11:11:11:11"), None)
 
     def testSetAddress(self):
         class MyBus(bus.Bus):
@@ -179,7 +179,7 @@ class YARPTest(unittest.TestCase):
         tb.addReceivedMessages([
             None,
             # Ping response from something with our desired address
-            messages.YARPMessage(query=True, response=True, sender=0x2B,
+            messages.YARPMessage(query=True, response=True, sender=0x4D,
                                  recipient=0xFF, hardware_id=sample_hwid_2)
         ])
         ubus = bus.Bus(tb, sample_hwid)
@@ -202,7 +202,7 @@ class YARPTest(unittest.TestCase):
         self.assertTrue(message.query)
         self.assertFalse(message.response)
         self.assertEquals(message.sender, 0xFF)
-        self.assertEquals(message.recipient, 0x2B)
+        self.assertEquals(message.recipient, 0x4D)
         self.assertEquals(message.hardware_id, None)
 
         # Node checks for others using the next ID in the sequence
@@ -211,7 +211,7 @@ class YARPTest(unittest.TestCase):
         self.assertTrue(message.query)
         self.assertFalse(message.response)
         self.assertEquals(message.sender, 0xFF)
-        self.assertEquals(message.recipient, 0x2C)
+        self.assertEquals(message.recipient, 0x4E)
         self.assertEquals(message.hardware_id, None)
 
     def testStartupDefaultAddress(self):
